@@ -35,15 +35,13 @@ abstract class Ai1wm_Database {
 	/**
 	 * WordPress database handler
 	 *
-	 * @access protected
-	 * @var mixed
+	 * @var object
 	 */
 	protected $wpdb = null;
 
 	/**
 	 * Old table prefixes
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $old_table_prefixes = array();
@@ -51,15 +49,27 @@ abstract class Ai1wm_Database {
 	/**
 	 * New table prefixes
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $new_table_prefixes = array();
 
 	/**
+	 * Old column prefixes
+	 *
+	 * @var array
+	 */
+	protected $old_column_prefixes = array();
+
+	/**
+	 * New column prefixes
+	 *
+	 * @var array
+	 */
+	protected $new_column_prefixes = array();
+
+	/**
 	 * Old replace values
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $old_replace_values = array();
@@ -67,7 +77,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * New replace values
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $new_replace_values = array();
@@ -75,7 +84,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * Table where clauses
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $table_where_clauses = array();
@@ -83,7 +91,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * Table prefix columns
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $table_prefix_columns = array();
@@ -91,7 +98,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * Include table prefixes
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $include_table_prefixes = array();
@@ -99,7 +105,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * Exclude table prefixes
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $exclude_table_prefixes = array();
@@ -107,7 +112,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * List all tables that should not be affected by the timeout of the current request
 	 *
-	 * @access protected
 	 * @var array
 	 */
 	protected $atomic_tables = array();
@@ -115,7 +119,6 @@ abstract class Ai1wm_Database {
 	/**
 	 * Visual Composer
 	 *
-	 * @access protected
 	 * @var bool
 	 */
 	protected $visual_composer = false;
@@ -123,8 +126,7 @@ abstract class Ai1wm_Database {
 	/**
 	 * Constructor
 	 *
-	 * @param  object $wpdb WPDB instance
-	 * @return Ai1wm_Database
+	 * @param object $wpdb WPDB instance
 	 */
 	public function __construct( $wpdb ) {
 		$this->wpdb = $wpdb;
@@ -195,6 +197,48 @@ abstract class Ai1wm_Database {
 	 */
 	public function get_new_table_prefixes() {
 		return $this->new_table_prefixes;
+	}
+
+	/**
+	 * Set old column prefixes
+	 *
+	 * @param  array $prefixes List of column prefixes
+	 * @return Ai1wm_Database
+	 */
+	public function set_old_column_prefixes( $prefixes ) {
+		$this->old_column_prefixes = $prefixes;
+
+		return $this;
+	}
+
+	/**
+	 * Get old column prefixes
+	 *
+	 * @return array
+	 */
+	public function get_old_column_prefixes() {
+		return $this->old_column_prefixes;
+	}
+
+	/**
+	 * Set new column prefixes
+	 *
+	 * @param  array $prefixes List of column prefixes
+	 * @return Ai1wm_Database
+	 */
+	public function set_new_column_prefixes( $prefixes ) {
+		$this->new_column_prefixes = $prefixes;
+
+		return $this;
+	}
+
+	/**
+	 * Get new column prefixes
+	 *
+	 * @return array
+	 */
+	public function get_new_column_prefixes() {
+		return $this->new_column_prefixes;
 	}
 
 	/**
@@ -511,7 +555,7 @@ abstract class Ai1wm_Database {
 		$tables = $this->get_tables();
 
 		// Export tables
-		for ( ; $table_index < count( $tables ); $table_index++ ) {
+		for ( ; $table_index < count( $tables ); ) {
 
 			// Get table name
 			$table_name = $tables[ $table_index ];
@@ -594,8 +638,18 @@ abstract class Ai1wm_Database {
 				// Apply additional table prefix columns
 				$columns = $this->get_table_prefix_columns( $table_name );
 
-				// Get results
+				// Run SQL query
 				$result = $this->query( $query );
+
+				// Repair table data
+				if ( $this->errno() === 1194 ) {
+
+					// Current table is marked as crashed and should be repaired
+					$this->repair_table( $table_name );
+
+					// Run SQL query
+					$result = $this->query( $query );
+				}
 
 				// Generate insert statements
 				if ( $num_rows = $this->num_rows( $result ) ) {
@@ -612,7 +666,7 @@ abstract class Ai1wm_Database {
 						foreach ( $row as $key => $value ) {
 							// Replace table prefix columns
 							if ( isset( $columns[ strtolower( $key ) ] ) ) {
-								$value = $this->replace_table_prefixes( $value, 0 );
+								$value = $this->replace_column_prefixes( $value, 0 );
 							}
 
 							// Replace table values
@@ -628,7 +682,7 @@ abstract class Ai1wm_Database {
 						// Write insert statement
 						ai1wm_write( $file_handler, $table_insert );
 
-						// Set current table rows
+						// Set current table offset
 						$table_offset++;
 
 						// Write end of transaction
@@ -642,6 +696,9 @@ abstract class Ai1wm_Database {
 					if ( $table_offset % Ai1wm_Database::QUERIES_PER_TRANSACTION !== 0 ) {
 						ai1wm_write( $file_handler, "COMMIT;\n" );
 					}
+
+					// Set curent table index
+					$table_index++;
 
 					// Set current table offset
 					$table_offset = 0;
@@ -847,6 +904,16 @@ abstract class Ai1wm_Database {
 	}
 
 	/**
+	 * Repair MySQL table
+	 *
+	 * @param  string $table_name Table name
+	 * @return void
+	 */
+	protected function repair_table( $table_name ) {
+		$this->query( "REPAIR TABLE `{$table_name}`" );
+	}
+
+	/**
 	 * Get MySQL primary keys
 	 *
 	 * @param  string $table_name Table name
@@ -895,14 +962,42 @@ abstract class Ai1wm_Database {
 	/**
 	 * Replace table prefixes
 	 *
-	 * @param  string  $input    Table value
-	 * @param  bool    $position Replace first occurrence at a specified position
+	 * @param  string $input    Table value
+	 * @param  mixed  $position Replace first occurrence at a specified position
 	 * @return string
 	 */
 	protected function replace_table_prefixes( $input, $position = false ) {
 		// Get table prefixes
 		$search  = $this->get_old_table_prefixes();
 		$replace = $this->get_new_table_prefixes();
+
+		// Replace first occurance at a specified position
+		if ( $position !== false ) {
+			for ( $i = 0; $i < count( $search ); $i++ ) {
+				$current = stripos( $input, $search[ $i ] );
+				if ( $current === $position ) {
+					$input = substr_replace( $input, $replace[ $i ], $current, strlen( $search[ $i ] ) );
+				}
+			}
+
+			return $input;
+		}
+
+		// Replace all occurrences
+		return str_ireplace( $search, $replace, $input );
+	}
+
+	/**
+	 * Replace column prefixes
+	 *
+	 * @param  string $input    Column value
+	 * @param  mixed  $position Replace first occurrence at a specified position
+	 * @return string
+	 */
+	protected function replace_column_prefixes( $input, $position = false ) {
+		// Get column prefixes
+		$search  = $this->get_old_column_prefixes();
+		$replace = $this->get_new_column_prefixes();
 
 		// Replace first occurance at a specified position
 		if ( $position !== false ) {
