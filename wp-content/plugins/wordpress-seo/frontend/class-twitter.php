@@ -211,6 +211,7 @@ class WPSEO_Twitter {
 		return wp_strip_all_tags( get_the_excerpt() );
 	}
 
+
 	/**
 	 * Getting the description for the taxonomy
 	 *
@@ -228,6 +229,7 @@ class WPSEO_Twitter {
 		}
 
 		return wp_strip_all_tags( term_description() );
+
 	}
 
 	/**

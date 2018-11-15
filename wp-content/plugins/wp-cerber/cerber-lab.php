@@ -524,26 +524,17 @@ function lab_is_cloud_ok(){
  * @param $details
  */
 function lab_save_push( $ip, $reason_id, $details ) {
-	global $wpdb;
 	$ip = filter_var( $ip, FILTER_VALIDATE_IP );
 	if ( ! $ip || is_ip_private( $ip ) || cerber_acl_check( $ip, 'W' ) || ! ( crb_get_settings( 'cerberlab' ) || lab_lab() ) ) {
 		return;
 	}
 	$reason_id = absint( $reason_id );
-	if ($reason_id == 8 || $reason_id == 9){
+	if ( $reason_id == 8 || $reason_id == 9 ) {
 		$details = array( 'uri' => $_SERVER['REQUEST_URI'] );
 	}
 	if ( is_array( $details ) ) {
 		$details = serialize( $details );
 	}
-	/*
-	$wpdb->insert( CERBER_LAB_TABLE, array(
-		'ip'        => $ip,
-		'reason_id' => $reason_id,
-		'details'   => $details,
-		'stamp'     => time(),
-	), array( '%s', '%d', '%s', '%d' ) );
-	*/
 	$details = cerber_real_escape( $details );
 	cerber_db_query( 'INSERT INTO ' . CERBER_LAB_TABLE . ' (ip, reason_id, details, stamp) VALUES ("' . $ip . '",' . $reason_id . ',"' . $details . '",' . time() . ')' );
 }
@@ -672,6 +663,7 @@ function lab_validate_lic( $lic = '' ) {
 	}
 
 	if ( ! $ret || empty( $ret['response']['expires_gmt'] ) ) {
+		cerber_admin_notice( 'A network error occurred while verifying the license key. Please try again in a couple of minutes.' );
 		$expires = 0;
 	}
 	else {

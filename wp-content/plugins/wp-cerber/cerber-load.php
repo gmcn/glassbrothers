@@ -83,6 +83,8 @@ define( 'CERBER_TECH', 'https://cerber.tech/' );
 
 define( 'CERBER_CIREC_LIMIT', 50 ); // Upper limit for allowed nested values during inspection for malware
 
+define( 'CERBER_AGGRESSIVE', 1 );
+
 require_once( dirname( __FILE__ ) . '/cerber-pluggable.php' );
 require_once( dirname( __FILE__ ) . '/common.php' );
 require_once( dirname( __FILE__ ) . '/settings.php' );
@@ -258,7 +260,7 @@ class WP_Cerber {
 		$deny = false;
 		$act = 18;
 		if ( cerber_is_http_post() ) {
-			if ( ! cerber_is_allowed() ) {
+			if ( ! cerber_is_allowed( null, array( 1, 3 ) ) ) {
 				$deny = true;
 				$act  = 18;
 			}
@@ -369,7 +371,8 @@ class WP_Cerber {
 				$min   = 1 + ( $block->block_until - time() ) / 60;
 
 				return apply_filters( 'cerber_msg_reached',
-					sprintf( __( 'You have reached the login attempts limit. Please try again in %d minutes.', 'wp-cerber' ), $min ),
+					//sprintf( __( 'You have reached the login attempts limit. Please try again in %d minutes.', 'wp-cerber' ), $min ),
+					sprintf( __( 'You have exceeded the number of allowed login attempts. Please try again in %d minutes.', 'wp-cerber' ), $min ),
 					$min );
 				break;
 			default:
@@ -869,9 +872,9 @@ function cerber_wp_login_page() {
  * @return bool
  */
 function cerber_is_login_request() {
-    static $ret;
+	static $ret;
 
-    if ( isset( $ret ) ) {
+	if ( isset( $ret ) ) {
 		return $ret;
 	}
 
@@ -888,8 +891,8 @@ function cerber_is_login_request() {
 			$ret = true;
 		}
 	}
-    //elseif ( strtolower( cerber_parse_uri( true ) ) == WP_LOGIN_SCRIPT ) {
-	elseif ( cerber_get_uri_script() == WP_LOGIN_SCRIPT ) {
+	//elseif ( strtolower( cerber_parse_uri( true ) ) == WP_LOGIN_SCRIPT ) {
+    elseif ( cerber_get_uri_script() == WP_LOGIN_SCRIPT ) {
 		$ret = true;
 	}
 
@@ -1016,8 +1019,11 @@ function cerber_stop_authentication( $user, $password ) {
 	return $user;
 }
 
-/*
+/**
+ *
  * Handler for failed login attempts
+ *
+ * @param $user_login
  *
  */
 //add_action( 'wp_login_failed', 'cerber_login_failed' ); // @since 4.18
@@ -1636,14 +1642,14 @@ function cerber_access_control() {
  * Antispam & Antibot for forms
  *
  */
-function cerber_post_control(){
-    global  $cerber_status;
+function cerber_post_control() {
+	global $cerber_status;
 
-	if ( !cerber_is_http_post() || cerber_acl_check( null, 'W' ) ) {
+	if ( ! cerber_is_http_post() || cerber_acl_check( null, 'W' ) ) {
 		return;
 	}
 
-	if ( !cerber_antibot_enabled('botsany') && !cerber_geo_rules('geo_submit')) {
+	if ( ! cerber_antibot_enabled( 'botsany' ) && ! cerber_geo_rules( 'geo_submit' ) ) {
 		return;
 	}
 
@@ -1659,24 +1665,24 @@ function cerber_post_control(){
 
 	if ( ! cerber_is_allowed() ) {
 		$deny = true;
-		cerber_log(18);
+		cerber_log( 18 );
 	}
-	elseif ( cerber_is_bot( 'botsany' ) ) {
+    elseif ( cerber_is_bot( 'botsany' ) ) {
 		$deny = true;
 		cerber_log( 17 );
 	}
-	elseif ( !cerber_geo_allowed( 'geo_submit' ) ) {
-		$deny = true;
+    elseif ( ! cerber_geo_allowed( 'geo_submit' ) ) {
+		$deny          = true;
 		$cerber_status = 16; // TODO: refactor cerber_log, include this status as a second parameter
 		cerber_log( 18 );
 	}
-	elseif ( lab_is_blocked( null, true ) ) {
-		$deny = true;
+    elseif ( lab_is_blocked( null, true ) ) {
+		$deny          = true;
 		$cerber_status = 18;
 		cerber_log( 18 );
 	}
 
-	if ($deny){
+	if ( $deny ) {
 		cerber_forbidden_page();
 	}
 
@@ -2431,7 +2437,7 @@ function cerber_block_add( $ip = '', $reason_id = 1, $details = '', $duration = 
 
 	//$wp_cerber->setProcessed();
 
-	if ( empty($ip) ) {
+	if ( empty( $ip ) || ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 		$ip = $wp_cerber->getRemoteIp();
 	}
 
@@ -2473,7 +2479,8 @@ function cerber_block_add( $ip = '', $reason_id = 1, $details = '', $duration = 
 	$result = $wpdb->insert( CERBER_BLOCKS_TABLE, array(
 		'ip'          => $ip,
 		'block_until' => $until,
-		'reason'      => $reason
+		'reason'      => $reason,
+		'reason_id'   => absint( $reason_id )
 	), array( '%s', '%d', '%s' ) );
 
 	if ( $result ) {
@@ -2516,7 +2523,9 @@ function cerber_block_delete( $ip ) {
 function cerber_block_check( $ip = '' ) {
 
 	// @since 4.8
-	if (cerber_get_block($ip)) return true;
+	if ( cerber_get_block( $ip ) ) {
+		return true;
+	}
 
 	return false;
 }
@@ -2530,7 +2539,7 @@ function cerber_block_check( $ip = '' ) {
  * @return object|bool object if IP is locked out, false otherwise
  */
 function cerber_get_block( $ip = '' ) {
-	global $wpdb, $wp_cerber;
+	global $wp_cerber;
 
 	if ( ! $ip ) {
 		$wp_cerber = get_wp_cerber();
@@ -2546,10 +2555,12 @@ function cerber_get_block( $ip = '' ) {
 		$subnet = cerber_get_subnet( $ip );
 		$where  .= ' OR ip = "' . $subnet . '"';
 	}
-	if ( $ret = $wpdb->get_row( 'SELECT * FROM ' . CERBER_BLOCKS_TABLE . $where ) ) {
+	/*if ( $ret = $wpdb->get_row( 'SELECT * FROM ' . CERBER_BLOCKS_TABLE . $where ) ) {
+		return $ret;
+	}*/
+	if ( $ret = cerber_db_get_row( 'SELECT * FROM ' . CERBER_BLOCKS_TABLE . $where, MYSQL_FETCH_OBJECT ) ) {
 		return $ret;
 	}
-
 	return false;
 }
 
@@ -2642,11 +2653,12 @@ function cerber_get_remain_count( $ip = '', $check_acl = true, $activity = array
  * Is a given IP is allowed to do restricted things?
  * Here Cerber makes its decision.
  *
- * @param $ip string IP address
+ * @param string    $ip IP address
+ * @param array     $allowed a list of reason ids @since 7.5.2
  *
  * @return bool
  */
-function cerber_is_allowed( $ip = '' ) {
+function cerber_is_allowed( $ip = '', $allowed = array() ) {
 
 	if ( ! $ip ) {
 		$wp_cerber = get_wp_cerber();
@@ -2656,17 +2668,23 @@ function cerber_is_allowed( $ip = '' ) {
 		return false;
 	}
 
-	// @since 4.7.9
-	if ( cerber_block_check( $ip ) ) {
-		return false;
-	}
-
+	// @since 7.5.2
 	$tag = cerber_acl_check( $ip );
 	if ( $tag == 'W' ) {
 		return true;
 	}
 	if ( $tag == 'B' ) {
 		return false;
+	}
+
+	// @since 4.7.9
+	if ( $b = cerber_get_block( $ip ) ) {
+		if ( empty( $allowed ) ) {
+			return false;
+		}
+        elseif ( ! in_array( $b->reason_id, $allowed ) ) {
+			return false;
+		}
 	}
 
 	/* @since 4.7.9
@@ -3404,7 +3422,7 @@ function cerber_send_email( $type = '', $msg = '', $ip = '' ) {
 			if ($max){
 				$last_date = cerber_date( $max );
 				//$last      = $wpdb->get_row( 'SELECT * FROM ' . CERBER_LOG_TABLE . ' WHERE stamp = ' . $max . ' AND activity IN (10,11)' );
-                $last      = cerber_db_get_row( 'SELECT * FROM ' . CERBER_LOG_TABLE . ' WHERE stamp = ' . $max . ' AND activity IN (10,11)', 5 );
+                $last      = cerber_db_get_row( 'SELECT * FROM ' . CERBER_LOG_TABLE . ' WHERE stamp = ' . $max . ' AND activity IN (10,11)', MYSQL_FETCH_OBJECT );
 			}
 			else $last = null;
 			if ( ! $last ) { // workaround for the empty log table
@@ -3667,8 +3685,13 @@ function cerber_init_cron(){
 }
 
 add_action( 'cerber_hourly_1', 'cerber_do_hourly' );
-function cerber_do_hourly($force = false) {
+function cerber_do_hourly( $force = false ) {
 	global $wpdb, $wp_cerber;
+
+	// Avoid multiple executions on a weird hosting
+	if ( ( $hour = get_site_transient( 'crb_hourly_1' ) ) && $hour == date( 'G' ) ) {
+		return;
+	}
 
 	if (is_multisite()) {
 		if ( ! $force && get_site_transient( 'cerber_multisite' ) ) {
@@ -4327,6 +4350,7 @@ function cerber_create_db($recreate = true) {
 		    ip varchar(39) CHARACTER SET ascii NOT NULL COMMENT 'Remote IP',
 		    block_until bigint(20) unsigned NOT NULL COMMENT 'Unix timestamp',
 		    reason varchar(250) NOT NULL COMMENT 'Why IP was blocked',
+		    reason_id int(11) unsigned NOT NULL DEFAULT '0',
 		    UNIQUE KEY ip (ip)
 			) DEFAULT CHARSET=utf8 COMMENT='Cerber list of currently blocked IPs';			
 				";
@@ -4506,7 +4530,7 @@ function cerber_upgrade_db( $force = false ) {
 	}
 
 	// @since 6.1
-	if ( $force || !cerber_is_index( CERBER_LOG_TABLE, 'session_index' ) ) {
+	if ( $force || ! cerber_is_index( CERBER_LOG_TABLE, 'session_index' ) ) {
 		$sql[] = 'ALTER TABLE ' . CERBER_LOG_TABLE . ' ADD INDEX session_index (session_id)';
 	}
 
@@ -4516,6 +4540,11 @@ function cerber_upgrade_db( $force = false ) {
 	// @since 7.1
 	if ( $force || ! cerber_is_column( cerber_get_db_prefix() . CERBER_SCAN_TABLE, 'file_status' ) ) {
 		$sql[] = 'ALTER TABLE ' . cerber_get_db_prefix() . CERBER_SCAN_TABLE . " ADD file_status INT UNSIGNED NOT NULL DEFAULT '0' AFTER scan_status";
+	}
+
+	// @since 7.5.2
+	if ( $force || ! cerber_is_column( CERBER_BLOCKS_TABLE, 'reason_id' ) ) {
+		$sql[] = 'ALTER TABLE ' . CERBER_BLOCKS_TABLE . ' ADD reason_id int(11) unsigned NOT NULL DEFAULT "0"';
 	}
 
 	if (!empty($sql)) {
@@ -4943,10 +4972,6 @@ function cerber_traffic_log(){
 		$details[8] = $_COOKIE;
 	}
 	if ( !empty( $details ) ) {
-	    /*
-		foreach ( $details as &$detail ) {
-			$detail = mb_substr($detail, 0, 1048576); // 1 Mb for ASCII
-	    }*/
 		$details = cerber_prepare_fields( $details );
 		$details = serialize($details);
 	}
@@ -5374,7 +5399,8 @@ function cerber_inspect_value( &$value = '', $reset = false ) {
 
 	if ( cerber_is_base64_encoded( $value ) ) {
 		//$crb_x64 = true;
-		$found = cerber_inspect_value( base64_decode( $value ) );
+		$varbyref = base64_decode( $value );
+		$found    = cerber_inspect_value( $varbyref );
 	}
 	else {
 		$parsed = cerber_parse_value( $value );
@@ -5408,15 +5434,15 @@ function cerber_parse_value( &$value ) {
 	$ret = array( array(), array() );
 	$code_tokens = array( T_STRING, T_EVAL );
 
-	$clean = preg_replace( "/[\r\n\s]+/", '', $value );
+	$clean = preg_replace( "/[\r\n\s]+/", '', cerber_remove_comments( $value ) );
 
-	if ( $tokens = token_get_all( '<?php ' . $clean ) ) {
+	if ( $tokens = @token_get_all( '<?php ' . $clean ) ) {
 		foreach ( $tokens as $token ) {
 			if ( ! is_array( $token ) ) {
 				continue;
 			}
 			if ( in_array( $token[0], $code_tokens ) && isset( $list[ $token[1] ] ) ) {
-				if ( preg_match( '/' . $token[1] . '\((?!\)).+\);/i', $clean ) ) {
+				if ( preg_match( '/' . $token[1] . '\((?!\)).+\)/i', $clean ) ) {
 					$ret[0] = array( $token[0], $list[ $token[1] ] );
 					break;
 				}

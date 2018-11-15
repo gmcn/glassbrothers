@@ -708,6 +708,10 @@ body.wp-cerber_page_cerber-integrity {
     border-bottom: none;
     /*margin-bottom: 10px;*/
 }
+#crb-the-table {
+    display: table;
+    width: 100%;
+}
 #crb-scan-details {
     padding: 0;
     border: solid #E5E5E5 2px;
@@ -718,14 +722,16 @@ body.wp-cerber_page_cerber-integrity {
     transition: height 2s;
 }
 #crb-scan-display div.scan-tile {
-    float: left;
-    min-width: 18%;
-    width: auto;
+    /*float: left;*/
+    display: table-cell;
+    width: 25%;
+    vertical-align: middle;
+    /*width: auto;*/
     text-align: center;
 }
 #crb-scan-display div.scan-tile div {
     display: inline-block;
-    text-align: left;
+    text-align: center;
 }
 #crb-scan-display div div p:first-of-type {
     font-size: 200%;
@@ -740,20 +746,25 @@ body.wp-cerber_page_cerber-integrity {
     white-space: nowrap;
 }
 
-#crb-scan-info {
+.crb-scan-info {
     width: 23%;
     text-align: left !important;
 }
-#crb-scan-info table {
+.crb-scan-info table {
     width: 100%;
+    padding-right: 2em;
 }
-#crb-scan-info table td:first-child{
+.crb-scan-info table td:first-child{
     padding-right: 1em;
+    color: #555;
+}
+.crb-scan-info table td:last-child{
+    color: #000;
 }
 
 @media screen and (max-width: 700px) {
     #crb-scan-display div.scan-tile,
-    #crb-scan-info {
+    .crb-scan-info {
         float: none;
         width: 100%;
         text-align: center;
@@ -763,9 +774,17 @@ body.wp-cerber_page_cerber-integrity {
         text-align: center;
     }
 
-    #crb-scan-info table {
+    .crb-scan-info table {
         width: auto;
         margin: 0 auto;
+    }
+
+    #crb-the-table {
+        display: block;
+    }
+
+    #crb-scan-display div.scan-tile {
+        display: block;
     }
 }
 

@@ -161,6 +161,12 @@ function cerber_push_the_news( $version ) {
 	$news['7.5'][] = 'Now the plugin inspects user sign ups (user registrations) on multisite WordPress installations and BuddyPress.';
 	$news['7.5'][] = 'The search for user activity, as well as enabling activity notifications, is improved.';
 
+	$news['7.6'][] = 'The quarantine has got a separate admin page in the WordPress dashboard which allows viewing deleted files, restoring or deleting them.';
+	$news['7.6'][] = 'Now the malware scanner and integrity checker supports multisite WordPress installations.';
+	$news['7.6'][] = 'Bug fixed: Once an address IP has been locked out after reaching the limit to the number of attempts to log in the "We’re sorry, you are not allowed to proceed" forbidden page is being displayed instead of the normal user message "You have exceeded the number of allowed login attempts".';
+	$news['7.6'][] = 'Bug fixed: PHP Notice: Only variables should be passed by reference in cerber-load.php on line 5377';
+
+
 	if ( ! empty( $news[ $version ] ) ) {
 		//$text = '<h3>What\'s new in WP Cerber '.$version.'</h3>';
 

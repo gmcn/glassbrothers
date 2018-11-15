@@ -194,6 +194,13 @@ jQuery(document).ready(function ($) {
         $("#crb-performance").html(scanner_data.performance);
         $("#crb-smode").html(smode);
 
+        $.each(scanner_data.numbers, function (type, value) {
+            var e = document.getElementById("crb-numbers-" + type);
+            if (e) {
+                $(e).text(value);
+            }
+        });
+
         $("#crb-total-files").html(scanner_data.total.files);
         $("#crb-scanned-files").html(scanner_data.scanned.files);
 

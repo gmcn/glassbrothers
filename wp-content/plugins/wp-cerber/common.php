@@ -58,9 +58,9 @@ function cerber_admin_link($tab = '', $args = array()){
 	//return add_query_arg(array('record_id'=>$record_id,'mode'=>'view_record'),admin_url('admin.php?page=storage'));
 
 	if ( empty( $args['page'] ) ) {
-		if ( in_array( $tab, array( 'recaptcha', 'antispam' ) ) ) {
+		if ( in_array( $tab, array( 'antispam', 'captcha' ) ) ) {
 			$page = 'cerber-recaptcha';
-			$tab  = null;
+			//$tab  = null;
 		}
 		elseif ( in_array( $tab, array( 'imex', 'diagnostic', 'license' ) ) ) {
 			$page = 'cerber-tools';
@@ -71,7 +71,7 @@ function cerber_admin_link($tab = '', $args = array()){
 		elseif ( in_array( $tab, array( 'geo' ) ) ) {
 			$page = 'cerber-rules';
 		}
-		elseif ( in_array( $tab, array( 'scanner', 'scan_settings', 'scan_schedule' ) ) ) {
+		elseif ( in_array( $tab, array( 'scanner', 'scan_settings', 'scan_schedule', 'scan_quarantine' ) ) ) {
 			$page = 'cerber-integrity';
 		}
 		else {
@@ -491,6 +491,29 @@ function recursive_search_key($array, $needle){
 		}
 	}
 	return false;
+}
+
+/**
+ * array_column() implementation for PHP < 5.5
+ *
+ * @param array $arr Multidimensional array
+ * @param string $column Column key
+ *
+ * @return array
+ */
+function crb_array_column( $arr = array(), $column = '' ) {
+	global $x_column;
+	$x_column = $column;
+
+	$ret = array_map( function ( $element ) {
+		global $x_column;
+
+		return $element[ $x_column ];
+	}, $arr );
+
+	$ret = array_values( $ret );
+
+	return $ret;
 }
 
 /**
@@ -968,8 +991,10 @@ function cerber_admin_message($msg){
  * @return string
  */
 function cerber_ago_time( $time ) {
+	$diff = human_time_diff( $time );
 
-	return sprintf( __( '%s ago' ), human_time_diff( $time ) );
+	// _x( 'at', 'preposition of time',
+	return ( $time <= time() ) ? sprintf( __( '%s ago' ), $diff ) : sprintf( _x( 'in %s', 'preposition of a period of time like: in 6 hours', 'wp-cerber' ), $diff );
 }
 
 function cerber_auto_date( $time ) {
